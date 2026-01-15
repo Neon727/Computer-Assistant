@@ -5,6 +5,7 @@ from tkinter import messagebox
 import threading
 import pyttsx3
 import os
+import time
 
 # Insert your OpenAI API key here
 openai.api_key = os.getenv("AI_KEY")
@@ -31,6 +32,7 @@ def show_box(text):
     root = tk.Tk()
     root.withdraw()  # Hide the main window
     messagebox.showinfo("Answer", text)
+    time.sleep(10)
     root.destroy()
 
 def speak(text):
