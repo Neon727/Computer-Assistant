@@ -4,11 +4,29 @@ import tkinter as tk
 from tkinter import messagebox
 import threading
 import pyttsx3
+import os
 
 # Insert your OpenAI API key here
-openai.api_key = 'your-api-key-here'
+openai.api_key = os.getenv("AI_KEY")
 
 WAKE_WORD = "computer ai"
+
+def get_answer(question):
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=question,
+            max_tokens=150,
+            temperature=0.7
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return f"Error: {e}"
+
+def show_box(text):
+    def run():
+        root = tk.Tk()
+        root.withdraw()
 
 # Initialize text-to-speech engine
 tts_engine = pyttsx3.init()
@@ -65,22 +83,6 @@ def listen_for_question():
             show_box("Listening timed out. Please try again.")
             speak("Listening timed out. Please try again.")
 
-def get_answer(question):
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=question,
-            max_tokens=150,
-            temperature=0.7
-        )
-        return response.choices[0].text.strip()
-    except Exception as e:
-        return f"Error: {e}"
-
-def show_box(text):
-    def run():
-        root = tk.Tk()
-        root.withdraw()
         messagebox.showinfo("Answer", text)
         root.destroy()
     threading.Thread(target=run).start()
