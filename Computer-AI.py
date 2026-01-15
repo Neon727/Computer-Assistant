@@ -11,6 +11,9 @@ openai.api_key = os.getenv("AI_KEY")
 
 WAKE_WORD = "computer ai"
 
+# Initialize text-to-speech engine
+tts_engine = pyttsx3.init()
+
 def get_answer(question):
     try:
         response = openai.Completion.create(
@@ -24,44 +27,19 @@ def get_answer(question):
         return f"Error: {e}"
 
 def show_box(text):
-    def run():
-        root = tk.Tk()
-        root.withdraw()
-
-# Initialize text-to-speech engine
-tts_engine = pyttsx3.init()
+    # Create a simple Tkinter message box
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    messagebox.showinfo("Answer", text)
+    root.destroy()
 
 def speak(text):
     tts_engine.say(text)
     tts_engine.runAndWait()
 
-def listen_for_wake_word():
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone()
-
-    print("Listening for wake word...")
-    while True:
-        with microphone as source:
-            recognizer.adjust_for_ambient_noise(source)
-            try:
-                audio = recognizer.listen(source, timeout=1)
-                phrase = recognizer.recognize_google(audio).lower()
-                print(f"Heard: {phrase}")
-                if WAKE_WORD in phrase:
-                    print("Wake word detected! Listening for your question...")
-                    listen_for_question()
-            except sr.WaitTimeoutError:
-                continue
-            except sr.UnknownValueError:
-                continue
-            except sr.RequestError:
-                print("API unavailable or unresponsive.")
-                continue
-
 def listen_for_question():
     recognizer = sr.Recognizer()
     microphone = sr.Microphone()
-
     with microphone as source:
         recognizer.adjust_for_ambient_noise(source)
         print("Say your question now.")
@@ -83,9 +61,29 @@ def listen_for_question():
             show_box("Listening timed out. Please try again.")
             speak("Listening timed out. Please try again.")
 
-        messagebox.showinfo("Answer", text)
-        root.destroy()
-    threading.Thread(target=run).start()
+def listen_for_wake_word():
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
+    with microphone as source:
+        recognizer.adjust_for_ambient_noise(source)
+    print("Listening for wake word...")
+    while True:
+        with microphone as source:
+            try:
+                audio = recognizer.listen(source, timeout=1)
+                phrase = recognizer.recognize_google(audio).lower()
+                print(f"Heard: {phrase}")
+                if WAKE_WORD in phrase:
+                    print("Wake word detected! Listening for your question...")
+                    # Run question listening in a separate thread
+                    threading.Thread(target=listen_for_question).start()
+            except sr.WaitTimeoutError:
+                continue
+            except sr.UnknownValueError:
+                continue
+            except sr.RequestError:
+                print("API unavailable or unresponsive.")
+                continue
 
 if __name__ == "__main__":
     listen_for_wake_word()
