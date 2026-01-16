@@ -15,15 +15,18 @@ WAKE_WORD = "computer ai"
 # Initialize text-to-speech engine
 tts_engine = pyttsx3.init()
 
-def get_answer(question):
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=question,
-            max_tokens=150,
-            temperature=0.7
+def get_answer(question)
+  conversation_context = "\n".join(conversation_history[-6:])  # last 3 exchanges
+  prompt = f"{conversation_context}\nUser: {question}\nAI:"
+  try:
+    response = openai.Completion.create(
+    engine="text-davinci-003",
+    prompt=prompt,
+    max_tokens=150,
+    temperature=0.7,
+    stop=["User:", "AI:"]
         )
-        return response.choices[0].text.strip()
+    return response.choices[0].text.strip()
     except Exception as e:
         return f"Error: {e}"
 
