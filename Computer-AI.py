@@ -1,94 +1,122 @@
-import speech_recognition as sr
+import sounddevice as sd
+import vosk
+import json
+import queue
+import threading
 import openai
+import pyttsx3
 import tkinter as tk
 from tkinter import messagebox
-import threading
-import pyttsx3
 import os
 import time
 
-# Insert your OpenAI API key here
+# ================= CONFIG =================
+
 openai.api_key = os.getenv("AI_KEY")
-
 WAKE_WORD = "computer ai"
+MODEL_PATH = "models/vosk-model-small-en-us-0.15"
+SAMPLE_RATE = 16000
 
-# Initialize text-to-speech engine
+# ==========================================
+
+audio_queue = queue.Queue()
+conversation_history = []
+
+# Text-to-speech
 tts_engine = pyttsx3.init()
-
-def get_answer(question)
-  conversation_context = "\n".join(conversation_history[-6:])  # last 3 exchanges
-  prompt = f"{conversation_context}\nUser: {question}\nAI:"
-  try:
-    response = openai.Completion.create(
-    engine="text-davinci-003",
-    prompt=prompt,
-    max_tokens=150,
-    temperature=0.7,
-    stop=["User:", "AI:"]
-        )
-    return response.choices[0].text.strip()
-    except Exception as e:
-        return f"Error: {e}"
-
-def show_box(text):
-    # Create a simple Tkinter message box
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    messagebox.showinfo("Answer", text)
-    time.sleep(10)
-    root.destroy()
 
 def speak(text):
     tts_engine.say(text)
     tts_engine.runAndWait()
 
+def show_box(text):
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("Answer", text)
+    root.destroy()
+
+def get_answer(question):
+    conversation_history.append(f"User: {question}")
+    context = "\n".join(conversation_history[-6:])
+    prompt = f"{context}\nAI:"
+
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=150,
+            temperature=0.7,
+            stop=["User:", "AI:"]
+        )
+        answer = response.choices[0].text.strip()
+        conversation_history.append(f"AI: {answer}")
+        return answer
+    except Exception as e:
+        return f"Error: {e}"
+
+def audio_callback(indata, frames, time_info, status):
+    if status:
+        print(status)
+    audio_queue.put(bytes(indata))
+
+def listen_for_speech(timeout=6):
+    model = vosk.Model(MODEL_PATH)
+    recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
+
+    with sd.RawInputStream(
+        samplerate=SAMPLE_RATE,
+        blocksize=8000,
+        dtype="int16",
+        channels=1,
+        callback=audio_callback,
+    ):
+        start = time.time()
+        while time.time() - start < timeout:
+            data = audio_queue.get()
+            if recognizer.AcceptWaveform(data):
+                result = json.loads(recognizer.Result())
+                return result.get("text", "")
+    return ""
+
 def listen_for_question():
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone()
-    with microphone as source:
-        recognizer.adjust_for_ambient_noise(source)
-        print("Say your question now.")
-        try:
-            audio = recognizer.listen(source, timeout=5)
-            question = recognizer.recognize_google(audio)
-            print(f"Question: {question}")
-            answer = get_answer(question)
-            show_box(answer)
-            # Speak the answer aloud
-            speak(answer)
-        except sr.UnknownValueError:
-            show_box("Sorry, I didn't catch that.")
-            speak("Sorry, I didn't catch that.")
-        except sr.RequestError:
-            show_box("API error.")
-            speak("API error.")
-        except sr.WaitTimeoutError:
-            show_box("Listening timed out. Please try again.")
-            speak("Listening timed out. Please try again.")
+    print("Listening for question...")
+    question = listen_for_speech()
+
+    if not question:
+        show_box("Sorry, I didn't catch that.")
+        speak("Sorry, I didn't catch that.")
+        return
+
+    print("Question:", question)
+    answer = get_answer(question)
+    show_box(answer)
+    speak(answer)
 
 def listen_for_wake_word():
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone()
-    with microphone as source:
-        recognizer.adjust_for_ambient_noise(source)
     print("Listening for wake word...")
-    while True:
-        with microphone as source:
-            try:
-                audio = recognizer.listen(source, timeout=1)
-                phrase = recognizer.recognize_google(audio).lower()
-                print(f"Heard: {phrase}")
-                if WAKE_WORD in phrase:
-                    print("Wake word detected! Listening for your question...")
-                    # Run question listening in a separate thread
+    model = vosk.Model(MODEL_PATH)
+    recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
+
+    with sd.RawInputStream(
+        samplerate=SAMPLE_RATE,
+        blocksize=8000,
+        dtype="int16",
+        channels=1,
+        callback=audio_callback,
+    ):
+        while True:
+            data = audio_queue.get()
+            if recognizer.AcceptWaveform(data):
+                result = json.loads(recognizer.Result())
+                text = result.get("text", "").lower()
+
+                if text:
+                    print("Heard:", text)
+
+                if WAKE_WORD in text:
+                    print("Wake word detected!")
+                    speak("Yes?")
                     threading.Thread(target=listen_for_question).start()
-            except sr.WaitTimeoutError:
-                continue
-            except sr.UnknownValueError:
-                continue
-            except sr.RequestError:
-                print("API unavailable or unresponsive.")
-                continue
 
 if __name__ == "__main__":
     listen_for_wake_word()
