@@ -17,7 +17,7 @@ client = OpenAI(api_key=os.getenv("AI_KEY"))
 WAKE_WORD = "computer ai"
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 SAMPLE_RATE = 16000
-PIXEL_AVATAR_SIZE = 128
+PIXEL_AVATAR_SIZE = 1024
 # ==========================================
 
 audio_queue = queue.Queue()
